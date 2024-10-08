@@ -116,6 +116,8 @@ namespace Microsoft.Generator.CSharp.Providers
             return modifiers;
         }
 
+        internal virtual TypeProvider? BaseTypeProvider => null;
+
         protected virtual CSharpType? GetBaseType() => null;
 
         public virtual WhereExpression? WhereClause { get; protected init; }
@@ -156,7 +158,18 @@ namespace Microsoft.Generator.CSharp.Providers
             var properties = new List<PropertyProvider>();
             var customProperties = new Dictionary<string, PropertyProvider>();
             var renamedProperties = new Dictionary<string, PropertyProvider>();
-            foreach (var customProperty in CustomCodeView?.Properties ?? [])
+            var namedTypeProviderProperties = CustomCodeView?.Properties != null
+                ? new List<PropertyProvider>(CustomCodeView.Properties)
+                : [];
+            var baseTypeCustomCodeView = BaseTypeProvider?.CustomCodeView;
+
+            while (baseTypeCustomCodeView != null)
+            {
+                namedTypeProviderProperties.AddRange(baseTypeCustomCodeView.Properties);
+                baseTypeCustomCodeView = baseTypeCustomCodeView.BaseTypeProvider?.CustomCodeView;
+            }
+
+            foreach (var customProperty in namedTypeProviderProperties)
             {
                 customProperties.Add(customProperty.Name, customProperty);
                 foreach (var attribute in customProperty.Attributes ?? [])
