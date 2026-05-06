@@ -76,6 +76,7 @@
     <ProjectReference Include="$(RepoRoot)\TestProjects\Spector\http\type\property\nullable\src\Type.Property.Nullable.csproj" />
     <ProjectReference Include="$(RepoRoot)\TestProjects\Spector\http\type\property\optionality\src\Type.Property.Optional.csproj" />
     <ProjectReference Include="$(RepoRoot)\TestProjects\Spector\http\type\property\value-types\src\Type.Property.ValueTypes.csproj" />
+    <ProjectReference Include="$(RepoRoot)\TestProjects\Spector\http\type\file\src\Type.File.csproj" />
     <ProjectReference Include="$(RepoRoot)\TestProjects\Spector\http\type\scalar\src\Type.Scalar.csproj" />
     <ProjectReference Include="$(RepoRoot)\TestProjects\Spector\http\type\union\src\Type.Union.csproj" />
     <ProjectReference Include="$(RepoRoot)\TestProjects\Spector\http\versioning\added\v1\src\Versioning.Added.V1.csproj" Aliases="VersioningAddedV1" />
