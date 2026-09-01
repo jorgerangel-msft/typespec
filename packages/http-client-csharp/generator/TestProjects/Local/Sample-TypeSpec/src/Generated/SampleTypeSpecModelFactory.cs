@@ -438,6 +438,41 @@ namespace SampleTypeSpec
             return new StreamingItem(message, additionalBinaryDataProperties: null);
         }
 
+        /// <summary> The MyBird. </summary>
+        /// <param name="color"></param>
+        /// <param name="age"></param>
+        /// <returns> A new <see cref="SampleTypeSpec.MyBird"/> instance for mocking. </returns>
+        public static MyBird MyBird(string color = default, int age = default)
+        {
+            return new MyBird(color, age, default);
+        }
+
+        /// <summary> The MyLizard. </summary>
+        /// <param name="species"></param>
+        /// <param name="lengthInches"></param>
+        /// <returns> A new <see cref="SampleTypeSpec.MyLizard"/> instance for mocking. </returns>
+        public static MyLizard MyLizard(string species = default, int lengthInches = default)
+        {
+            return new MyLizard(species, lengthInches, default);
+        }
+
+        /// <summary> The MyShark. </summary>
+        /// <param name="name"></param>
+        /// <param name="finCount"></param>
+        /// <returns> A new <see cref="SampleTypeSpec.MyShark"/> instance for mocking. </returns>
+        public static MyShark MyShark(string name = default, int finCount = default)
+        {
+            return new MyShark(name, finCount, default);
+        }
+
+        /// <summary> The TrackerReference. </summary>
+        /// <param name="bar"></param>
+        /// <returns> A new <see cref="SampleTypeSpec.TrackerReference"/> instance for mocking. </returns>
+        public static TrackerReference TrackerReference(string bar = default)
+        {
+            return new TrackerReference(bar, additionalBinaryDataProperties: null);
+        }
+
         /// <summary>
         /// Base animal with discriminator
         /// Please note this is the abstract base class. The derived classes available for instantiation are: <see cref="SampleTypeSpec.Pet"/> and <see cref="SampleTypeSpec.Dog"/>.
