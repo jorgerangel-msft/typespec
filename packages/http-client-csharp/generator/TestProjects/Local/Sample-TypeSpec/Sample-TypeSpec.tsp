@@ -715,6 +715,38 @@ op UpdateXmlAdvancedModel(@body body: XmlAdvancedModel, @header contentType: "ap
   @body body: XmlAdvancedModel;
 };
 
+// Composes TARGET with input-only usage.
+// Expected usage: Input,Json -> composed properties get + set.
+@dynamicModel
+model MyBird {
+    color: string;
+    age: int32;
+}
+
+// Composes TARGET with output-only usage.
+// Expected usage: Output,Json -> composed properties get only.
+@dynamicModel
+model MyLizard {
+    species: string;
+    lengthInches: int32;
+}
+
+// Composes TARGET with round-trip usage.
+// Expected usage: Input,Output,Json -> composed properties get + set.
+@dynamicModel
+model MyShark {
+    name: string;
+    finCount: int32;
+}
+
+// Model-typed value used by composed properties on MyLizard and MyShark.
+// In a real spec this would be referenced by the composing model. Those models
+// are simulated here by hand-written extension classes, so nothing in the spec
+// references this type -- hence the operation below to keep it reachable.
+model TrackerReference {
+    bar: string;
+}
+
 @doc("Base animal with discriminator")
 @discriminator("kind")
 model Animal {
@@ -934,3 +966,24 @@ op receiveJsonLines(): JsonlStream<StreamingItem>;
 @get
 @route("/streaming/sse/receive")
 op receiveSse(): SSEStream<SampleEvents>;
+
+// MyBird is input-only: sent as a request body, never returned.
+@post
+@route("/createBird")
+op createBird(@body bird: MyBird): void;
+
+// MyLizard is output-only: only ever returned.
+@get
+@route("/getLizard")
+op getLizard(@query id: string): MyLizard;
+
+// MyShark is round-trip: both sent and returned.
+@post
+@route("/updateShark")
+op updateShark(@body shark: MyShark): MyShark;
+
+// Exists only because the composing models are simulated by hand-written
+// extension classes; without it nothing in this spec references TrackerReference.
+@post
+@route("/updateTracker")
+op updateTracker(@body tracker: TrackerReference): TrackerReference;
