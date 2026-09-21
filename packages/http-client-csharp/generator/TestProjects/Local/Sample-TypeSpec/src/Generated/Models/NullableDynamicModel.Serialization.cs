@@ -313,6 +313,8 @@ namespace SampleTypeSpec
                 writer.WriteEndArray();
             }
 
+            ComposedWriters.Write(writer, this, options, ref _patch, _originalInput, _additionalBinaryDataProperties,
+                DeclaredPropertyNames, _additionalDeclaredPropertyNames);
             Patch.WriteTo(writer);
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         }
@@ -350,9 +352,11 @@ namespace SampleTypeSpec
             IDictionary<string, IDictionary<string, AnotherDynamicModel>> nestedChildDictionary = default;
             IDictionary<string, IList<AnotherDynamicModel>> dictionaryChildren = default;
             IList<IDictionary<string, AnotherDynamicModel>> listOfDictionaries = default;
+            ReadOnlyMemory<byte> originalInput = (data ?? BinaryData.FromString(element.GetRawText())).ToMemory();
 #pragma warning disable SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
-            JsonPatch patch = new JsonPatch(data is null ? ReadOnlyMemory<byte>.Empty : data.ToMemory());
+            JsonPatch patch = new JsonPatch(originalInput);
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+            var additionalBinaryDataProperties = new Dictionary<string, BinaryData>(StringComparer.Ordinal);
             foreach (var prop in element.EnumerateObject())
             {
                 if (prop.NameEquals("modelValue"u8))
@@ -497,7 +501,10 @@ namespace SampleTypeSpec
                     listOfDictionaries = array;
                     continue;
                 }
-                patch.Set([.. "$."u8, .. Encoding.UTF8.GetBytes(prop.Name)], prop.Value.GetUtf8Bytes());
+                if (options.Format != "W")
+                {
+                    additionalBinaryDataProperties.Add(prop.Name, BinaryData.FromString(prop.Value.GetRawText()));
+                }
             }
             return new NullableDynamicModel(
                 modelValue,
@@ -507,7 +514,9 @@ namespace SampleTypeSpec
                 nestedChildDictionary ?? new ChangeTrackingDictionary<string, IDictionary<string, AnotherDynamicModel>>(),
                 dictionaryChildren ?? new ChangeTrackingDictionary<string, IList<AnotherDynamicModel>>(),
                 listOfDictionaries ?? new ChangeTrackingList<IDictionary<string, AnotherDynamicModel>>(),
-                patch);
+                patch,
+                additionalBinaryDataProperties,
+                originalInput);
         }
 
         /// <summary></summary>
@@ -858,7 +867,7 @@ namespace SampleTypeSpec
                 item.Patch.Set([.. "$"u8, .. currentSlice.GetRemainder(i)], value);
                 return true;
             }
-            return false;
+            return ComposedSource.ApplyEdit(ref _patch, ref _publishingComposedEdit, jsonPath, value);
         }
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 

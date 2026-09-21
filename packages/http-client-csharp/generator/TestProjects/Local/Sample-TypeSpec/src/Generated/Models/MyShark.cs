@@ -7,9 +7,12 @@
 
 using System;
 using System.ClientModel.Primitives;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 namespace SampleTypeSpec
 {
@@ -18,6 +21,11 @@ namespace SampleTypeSpec
     {
         [Experimental("SCME0001")]
         private JsonPatch _patch;
+
+        private readonly IDictionary<string, BinaryData> _additionalBinaryDataProperties;
+        private readonly ReadOnlyMemory<byte> _originalInput;
+        private static readonly HashSet<string> DeclaredPropertyNames = new(StringComparer.Ordinal) { "name", "finCount" };
+        private bool _publishingComposedEdit;
 
         /// <summary> Initializes a new instance of <see cref="MyShark"/>. </summary>
         /// <param name="name"></param>
@@ -35,12 +43,18 @@ namespace SampleTypeSpec
         /// <param name="name"></param>
         /// <param name="finCount"></param>
         /// <param name="patch"></param>
+        /// <param name="additionalBinaryDataProperties"> Unknown values captured independently of writer registration. </param>
+        /// <param name="originalInput"> The same received bytes retained by the patch seed. </param>
 #pragma warning disable SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
-        internal MyShark(string name, int finCount, in JsonPatch patch)
+        internal MyShark(string name, int finCount, in JsonPatch patch, IDictionary<string, BinaryData> additionalBinaryDataProperties = null,
+            ReadOnlyMemory<byte> originalInput = default)
         {
             Name = name;
             FinCount = finCount;
             _patch = patch;
+            _additionalBinaryDataProperties = additionalBinaryDataProperties;
+            _originalInput = originalInput;
+            _patch.SetPropagators(PropagateSet, PropagateGet);
         }
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 
@@ -49,6 +63,68 @@ namespace SampleTypeSpec
         [EditorBrowsable(EditorBrowsableState.Never)]
         [Experimental("SCME0001")]
         public ref JsonPatch Patch => ref _patch;
+
+        // Writers and registered names must become visible together for one serialization.
+        private sealed class ComposedWriters
+        {
+            public readonly Action<Utf8JsonWriter, MyShark, ModelReaderWriterOptions> Write;
+            public readonly HashSet<string> PropertyNames;
+
+            public ComposedWriters(
+                Action<Utf8JsonWriter, MyShark, ModelReaderWriterOptions> write,
+                HashSet<string> propertyNames)
+            {
+                Write = write;
+                PropertyNames = propertyNames;
+            }
+        }
+
+        private static ComposedWriters _composedWriters = new ComposedWriters(
+            null, new HashSet<string>(StringComparer.Ordinal));
+
+        /// <summary> Infrastructure for composed extension properties. Not intended for direct use. </summary>
+        /// <param name="writer"> Writes the composing library's properties into this model's payload. </param>
+        /// <param name="serializedPropertyNames"> Names written at serialization, including untouched received values. </param>
+        /// <remarks> Registration is additive and thread-safe. Names never participate in deserialization. Client authors are responsible for avoiding duplicate property names. </remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Experimental("SCME0001")]
+        public static void AddComposedWriter(Action<Utf8JsonWriter, MyShark, ModelReaderWriterOptions> writer, params string[] serializedPropertyNames)
+        {
+            Argument.AssertNotNull(writer, nameof(writer));
+            Argument.AssertNotNull(serializedPropertyNames, nameof(serializedPropertyNames));
+            foreach (string name in serializedPropertyNames)
+            {
+                Argument.AssertNotNull(name, nameof(serializedPropertyNames));
+            }
+
+            ComposedWriters current;
+            ComposedWriters updated;
+            do
+            {
+                current = Volatile.Read(ref _composedWriters);
+                var write = current.Write;
+                var names = new HashSet<string>(current.PropertyNames, StringComparer.Ordinal);
+                bool changed = false;
+                foreach (string name in serializedPropertyNames)
+                {
+                    changed |= names.Add(name);
+                }
+                foreach (Action<Utf8JsonWriter, MyShark, ModelReaderWriterOptions> callback in writer.GetInvocationList())
+                {
+                    if (write is null || Array.IndexOf(write.GetInvocationList(), callback) < 0)
+                    {
+                        write = (Action<Utf8JsonWriter, MyShark, ModelReaderWriterOptions>)Delegate.Combine(write, callback);
+                        changed = true;
+                    }
+                }
+                if (!changed)
+                {
+                    return;
+                }
+                updated = new ComposedWriters(write, names);
+            }
+            while (!ReferenceEquals(Interlocked.CompareExchange(ref _composedWriters, updated, current), current));
+        }
 
         /// <summary> Gets or sets the Name. </summary>
         public string Name { get; set; }

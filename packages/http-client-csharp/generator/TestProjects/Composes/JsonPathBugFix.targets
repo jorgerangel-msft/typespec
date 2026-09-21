@@ -1,0 +1,17 @@
+<Project>
+  <!-- Imported after central versions only when explicitly enabled; machine NuGet configuration is unchanged. -->
+  <PropertyGroup>
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(ComposesJsonPathPackageFeed)</RestoreAdditionalProjectSources>
+    <DefineConstants Condition="'$(ComposesJsonPathPackageVersion)' != ''">$(DefineConstants);COMPOSES_JSONPATH_BUGFIX</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Update="System.ClientModel" Version="$(ComposesJsonPathPackageVersion)" />
+  </ItemGroup>
+  <Target Name="ValidateComposesJsonPathOverride" BeforeTargets="CollectPackageReferences;PrepareForBuild">
+    <Error Condition="'$(ComposesJsonPathPackageVersion)' == ''"
+           Text="Specify the unique bug-fix-only SCM 1.15 package version with ComposesJsonPathPackageVersion." />
+    <Error Condition="'$(ComposesJsonPathPackageFeed)' == '' or !Exists('$(ComposesJsonPathPackageFeed)')"
+           Text="ComposesJsonPathPackageFeed must identify the private local bug-fix package directory." />
+    <Message Importance="High" Text="Composes prototype: SCM $(ComposesJsonPathPackageVersion) from $(ComposesJsonPathPackageFeed); no model-member API flags." />
+  </Target>
+</Project>

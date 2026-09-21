@@ -82,8 +82,10 @@ namespace SampleTypeSpec
         /// <param name="dictionaryListFoo"></param>
         /// <param name="listOfDictionaryFoo"></param>
         /// <param name="patch"></param>
+        /// <param name="additionalBinaryDataProperties"> Unknown source values, independent of composing writer registration. </param>
+        /// <param name="originalInput"> The same received bytes retained by the patch seed. </param>
 #pragma warning disable SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
-        internal DynamicModel(string name, BinaryData optionalUnknown, int? optionalInt, IList<int> optionalNullableList, IList<int> requiredNullableList, IDictionary<string, int> optionalNullableDictionary, IDictionary<string, int> requiredNullableDictionary, IDictionary<string, int> primitiveDictionary, AnotherDynamicModel foo, IList<AnotherDynamicModel> listFoo, IList<IList<AnotherDynamicModel>> listOfListFoo, IDictionary<string, AnotherDynamicModel> dictionaryFoo, IDictionary<string, IDictionary<string, AnotherDynamicModel>> dictionaryOfDictionaryFoo, IDictionary<string, IList<AnotherDynamicModel>> dictionaryListFoo, IList<IDictionary<string, AnotherDynamicModel>> listOfDictionaryFoo, in JsonPatch patch)
+        internal DynamicModel(string name, BinaryData optionalUnknown, int? optionalInt, IList<int> optionalNullableList, IList<int> requiredNullableList, IDictionary<string, int> optionalNullableDictionary, IDictionary<string, int> requiredNullableDictionary, IDictionary<string, int> primitiveDictionary, AnotherDynamicModel foo, IList<AnotherDynamicModel> listFoo, IList<IList<AnotherDynamicModel>> listOfListFoo, IDictionary<string, AnotherDynamicModel> dictionaryFoo, IDictionary<string, IDictionary<string, AnotherDynamicModel>> dictionaryOfDictionaryFoo, IDictionary<string, IList<AnotherDynamicModel>> dictionaryListFoo, IList<IDictionary<string, AnotherDynamicModel>> listOfDictionaryFoo, in JsonPatch patch, IDictionary<string, BinaryData> additionalBinaryDataProperties = null, ReadOnlyMemory<byte> originalInput = default)
         {
             Name = name;
             OptionalUnknown = optionalUnknown;
@@ -101,6 +103,8 @@ namespace SampleTypeSpec
             DictionaryListFoo = dictionaryListFoo;
             ListOfDictionaryFoo = listOfDictionaryFoo;
             _patch = patch;
+            _additionalBinaryDataProperties = additionalBinaryDataProperties;
+            _originalInput = originalInput;
             _patch.SetPropagators(PropagateSet, PropagateGet);
         }
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.

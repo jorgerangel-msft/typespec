@@ -23,6 +23,7 @@
 
 using System.ClientModel.Primitives;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 
 namespace SampleTypeSpec
 {

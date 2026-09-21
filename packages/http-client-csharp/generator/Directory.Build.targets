@@ -28,5 +28,7 @@
     </ItemGroup>
 
     <Import Project="$(CentralPackagesFile)" Condition="'$(ShouldUseCentralVersions)' == 'true'" />
+    <Import Project="$(MSBuildThisFileDirectory)TestProjects\Composes\JsonPathBugFix.targets"
+            Condition="'$(ComposesJsonPathPackageVersion)' != ''" />
 
 </Project>

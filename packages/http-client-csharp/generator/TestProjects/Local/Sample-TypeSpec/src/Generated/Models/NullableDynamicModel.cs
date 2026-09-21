@@ -5,6 +5,7 @@
 
 #nullable disable
 
+using System;
 using System.ClientModel.Primitives;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -42,8 +43,10 @@ namespace SampleTypeSpec
         /// <param name="dictionaryChildren"></param>
         /// <param name="listOfDictionaries"></param>
         /// <param name="patch"></param>
+        /// <param name="additionalBinaryDataProperties"> Unknown source values, independent of composing writer registration. </param>
+        /// <param name="originalInput"> The same received bytes retained by the patch seed. </param>
 #pragma warning disable SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
-        internal NullableDynamicModel(AnotherDynamicModel modelValue, IList<AnotherDynamicModel> children, IDictionary<string, AnotherDynamicModel> childDictionary, IList<IList<AnotherDynamicModel>> nestedChildren, IDictionary<string, IDictionary<string, AnotherDynamicModel>> nestedChildDictionary, IDictionary<string, IList<AnotherDynamicModel>> dictionaryChildren, IList<IDictionary<string, AnotherDynamicModel>> listOfDictionaries, in JsonPatch patch)
+        internal NullableDynamicModel(AnotherDynamicModel modelValue, IList<AnotherDynamicModel> children, IDictionary<string, AnotherDynamicModel> childDictionary, IList<IList<AnotherDynamicModel>> nestedChildren, IDictionary<string, IDictionary<string, AnotherDynamicModel>> nestedChildDictionary, IDictionary<string, IList<AnotherDynamicModel>> dictionaryChildren, IList<IDictionary<string, AnotherDynamicModel>> listOfDictionaries, in JsonPatch patch, IDictionary<string, BinaryData> additionalBinaryDataProperties = null, ReadOnlyMemory<byte> originalInput = default)
         {
             ModelValue = modelValue;
             Children = children;
@@ -53,6 +56,8 @@ namespace SampleTypeSpec
             DictionaryChildren = dictionaryChildren;
             ListOfDictionaries = listOfDictionaries;
             _patch = patch;
+            _additionalBinaryDataProperties = additionalBinaryDataProperties;
+            _originalInput = originalInput;
             _patch.SetPropagators(PropagateSet, PropagateGet);
         }
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.

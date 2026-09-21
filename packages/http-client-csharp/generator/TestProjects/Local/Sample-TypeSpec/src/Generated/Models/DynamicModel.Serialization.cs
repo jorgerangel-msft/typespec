@@ -480,6 +480,7 @@ namespace SampleTypeSpec
                 writer.WriteEndArray();
             }
 
+            ComposedWriters.Write(writer, this, options, ref _patch, _originalInput, _additionalBinaryDataProperties, DeclaredPropertyNames);
             Patch.WriteTo(writer);
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         }
@@ -525,9 +526,11 @@ namespace SampleTypeSpec
             IDictionary<string, IDictionary<string, AnotherDynamicModel>> dictionaryOfDictionaryFoo = default;
             IDictionary<string, IList<AnotherDynamicModel>> dictionaryListFoo = default;
             IList<IDictionary<string, AnotherDynamicModel>> listOfDictionaryFoo = default;
+            ReadOnlyMemory<byte> originalInput = (data ?? BinaryData.FromString(element.GetRawText())).ToMemory();
 #pragma warning disable SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
-            JsonPatch patch = new JsonPatch(data is null ? ReadOnlyMemory<byte>.Empty : data.ToMemory());
+            JsonPatch patch = new JsonPatch(originalInput);
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+            var additionalBinaryDataProperties = new Dictionary<string, BinaryData>(StringComparer.Ordinal);
             foreach (var prop in element.EnumerateObject())
             {
                 if (prop.NameEquals("name"u8))
@@ -734,7 +737,10 @@ namespace SampleTypeSpec
                     listOfDictionaryFoo = array;
                     continue;
                 }
-                patch.Set([.. "$."u8, .. Encoding.UTF8.GetBytes(prop.Name)], prop.Value.GetUtf8Bytes());
+                if (options.Format != "W")
+                {
+                    additionalBinaryDataProperties.Add(prop.Name, BinaryData.FromString(prop.Value.GetRawText()));
+                }
             }
             return new DynamicModel(
                 name,
@@ -752,7 +758,9 @@ namespace SampleTypeSpec
                 dictionaryOfDictionaryFoo,
                 dictionaryListFoo,
                 listOfDictionaryFoo,
-                patch);
+                patch,
+                additionalBinaryDataProperties,
+                originalInput);
         }
 
         /// <summary></summary>
@@ -1103,7 +1111,7 @@ namespace SampleTypeSpec
                 item.Patch.Set([.. "$"u8, .. currentSlice.GetRemainder(i)], value);
                 return true;
             }
-            return false;
+            return ComposedSource.ApplyEdit(ref _patch, ref _publishingComposedEdit, jsonPath, value);
         }
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 

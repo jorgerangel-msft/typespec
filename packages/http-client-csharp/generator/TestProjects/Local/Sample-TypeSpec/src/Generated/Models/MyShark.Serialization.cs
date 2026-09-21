@@ -8,6 +8,7 @@
 using System;
 using System.ClientModel;
 using System.ClientModel.Primitives;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 
@@ -118,6 +119,11 @@ namespace SampleTypeSpec
                 writer.WriteNumberValue(FinCount);
             }
 
+            var composed = System.Threading.Volatile.Read(ref _composedWriters);
+            composed.Write?.Invoke(writer, this, options);
+            ComposedSource.WriteUnclaimed(writer, ref _patch, _originalInput, _additionalBinaryDataProperties,
+                composed.PropertyNames, DeclaredPropertyNames);
+
             Patch.WriteTo(writer);
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         }
@@ -150,9 +156,11 @@ namespace SampleTypeSpec
             }
             string name = default;
             int finCount = default;
+            ReadOnlyMemory<byte> originalInput = (data ?? BinaryData.FromString(element.GetRawText())).ToMemory();
 #pragma warning disable SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
-            JsonPatch patch = new JsonPatch(data is null ? ReadOnlyMemory<byte>.Empty : data.ToMemory());
+            JsonPatch patch = new JsonPatch(originalInput);
 #pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+            var additionalBinaryDataProperties = new Dictionary<string, BinaryData>(StringComparer.Ordinal);
             foreach (var prop in element.EnumerateObject())
             {
                 if (prop.NameEquals("name"u8))
@@ -165,9 +173,26 @@ namespace SampleTypeSpec
                     finCount = prop.Value.GetInt32();
                     continue;
                 }
-                patch.Set([.. "$."u8, .. Encoding.UTF8.GetBytes(prop.Name)], prop.Value.GetUtf8Bytes());
+                if (options.Format != "W")
+                {
+                    additionalBinaryDataProperties.Add(prop.Name, BinaryData.FromString(prop.Value.GetRawText()));
+                }
             }
-            return new MyShark(name, finCount, patch);
+            return new MyShark(name, finCount, patch, additionalBinaryDataProperties, originalInput);
         }
+
+#pragma warning disable SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        private bool PropagateSet(ReadOnlySpan<byte> jsonPath, JsonPatch.EncodedValue value)
+            => ComposedSource.ApplyEdit(ref _patch, ref _publishingComposedEdit, jsonPath, value);
+
+        private static bool PropagateGet(ReadOnlySpan<byte> jsonPath, out JsonPatch.EncodedValue value)
+        {
+            value = default;
+            return false;
+        }
+#pragma warning restore SCME0001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+
+        private static string GetRootPropertyName(ReadOnlySpan<byte> jsonPath, out int rootLength)
+            => ComposedSource.GetRootPropertyName(jsonPath, out rootLength);
     }
 }
