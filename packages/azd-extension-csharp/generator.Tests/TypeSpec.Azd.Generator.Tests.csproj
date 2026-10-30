@@ -15,5 +15,9 @@
     <PackageReference Include="Grpc.AspNetCore.Server" Version="2.70.0" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <None Update="TestData\tspCodeModel.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\samples\tagger\tsp-output\@typespec\azd-extension-csharp\src\Generated\*.cs"
+             Exclude="..\samples\tagger\tsp-output\@typespec\azd-extension-csharp\src\Generated\Program.cs"
+             Link="Generated\%(Filename)%(Extension)" />
+    <PackageReference Include="System.CommandLine" Version="2.0.0" />
   </ItemGroup>
 </Project>

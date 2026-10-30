@@ -12,7 +12,8 @@ using static Microsoft.TypeSpec.Generator.Snippets.Snippet;
 
 namespace TypeSpec.Azd.Generator;
 
-internal sealed class ProgramProvider(InputExtension definition, IReadOnlyList<TypeProvider> commands) : TypeProvider
+internal sealed class ProgramProvider(InputExtension definition, IReadOnlyList<TypeProvider> commands,
+    AzdClientProvider client, CommandOptionsProvider commandOptions) : TypeProvider
 {
     protected override string BuildName() => "Program";
     protected override TypeSignatureModifiers BuildDeclarationModifiers() => TypeSignatureModifiers.Internal | TypeSignatureModifiers.Static;
@@ -24,8 +25,8 @@ internal sealed class ProgramProvider(InputExtension definition, IReadOnlyList<T
         var statements = new List<MethodBodyStatement>
         {
             Declare("services", typeof(ServiceCollection), New.Instance(typeof(ServiceCollection)), out var services),
-            services.Invoke("AddSingleton", [], [typeof(AzdClient)]).Terminate(),
-            services.Invoke("AddSingleton", [], [typeof(global::TypeSpec.Azd.Generated.CommandOptions)]).Terminate(),
+            services.Invoke("AddSingleton", [], [client.Type]).Terminate(),
+            services.Invoke("AddSingleton", [], [commandOptions.Type]).Terminate(),
         };
         foreach (var command in commands)
         {
@@ -35,8 +36,8 @@ internal sealed class ProgramProvider(InputExtension definition, IReadOnlyList<T
             services.Invoke("BuildServiceProvider"), out var serviceProvider));
         statements.Add(Declare("rootCommand", typeof(RootCommand),
             New.Instance(typeof(RootCommand), Literal(definition.Description)), out var root));
-        statements.Add(Declare("options", typeof(global::TypeSpec.Azd.Generated.CommandOptions),
-            serviceProvider.Invoke("GetRequiredService", [], [typeof(global::TypeSpec.Azd.Generated.CommandOptions)]), out var options));
+        statements.Add(Declare("options", commandOptions.Type,
+            serviceProvider.Invoke("GetRequiredService", [], [commandOptions.Type]), out var options));
         statements.Add(options.Invoke("ConfigureRoot", root).Terminate());
         foreach (var command in commands)
         {

@@ -104,11 +104,103 @@ public class AzdClientTests
         }
     }
 
+    [Test]
+    public async Task ReportsHandlerFailuresInsteadOfSuccessfulCompletion()
+    {
+        using var client = new AzdClient(_address, AccessToken);
+        await using var events = new EventManager(client);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await events.AddProjectEventHandlerAsync("preprovision",
+            _ => Task.FromException(new InvalidOperationException("Failed domain rule.")), cancellation.Token);
+        await events.ReceiveAsync(cancellation.Token);
+        Assert.That(_state.HandlerStatus, Is.EqualTo("failed"));
+        Assert.That(_state.HandlerMessage, Is.EqualTo("Failed domain rule."));
+    }
+
+    [Test]
+    public async Task RegistersServiceFiltersAndDispatchesServiceHandlers()
+    {
+        using var client = new AzdClient(_address, AccessToken);
+        await using var events = new EventManager(client);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        string? serviceName = null;
+        await events.AddServiceEventHandlerAsync("prepackage", args =>
+        {
+            serviceName = args.Service.Name;
+            return Task.CompletedTask;
+        }, new ServerEventOptions { Host = "containerapp", Language = "csharp" }, cancellation.Token);
+        await events.ReceiveAsync(cancellation.Token);
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(serviceName, Is.EqualTo("test-service"));
+            Assert.That(_state.ServiceHost, Is.EqualTo("containerapp"));
+            Assert.That(_state.ServiceLanguage, Is.EqualTo("csharp"));
+            Assert.That(_state.HandlerStatus, Is.EqualTo("completed"));
+        }
+    }
+
+    [Test]
+    public async Task PropagatesUnexpectedStreamFailures()
+    {
+        _state.FailStream = true;
+        using var client = new AzdClient(_address, AccessToken);
+        await using var events = new EventManager(client);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var exception = Assert.ThrowsAsync<RpcException>(async () => await events.ReceiveAsync(cancellation.Token));
+        Assert.That(exception!.StatusCode, Is.EqualTo(StatusCode.Unavailable));
+    }
+
+    [Test]
+    public void HonorsCancellationBeforeSubscribing()
+    {
+        using var client = new AzdClient(_address, AccessToken);
+        var events = new EventManager(client);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(() =>
+            events.AddProjectEventHandlerAsync("preprovision", _ => Task.CompletedTask, cancellation.Token).GetAwaiter().GetResult());
+        events.DisposeAsync().GetAwaiter().GetResult();
+    }
+
+    [TestCase("unary")]
+    [TestCase("server-stream")]
+    [TestCase("client-stream")]
+    [TestCase("duplex")]
+    public void AuthenticatesEverySupportedCallShape(string shape)
+    {
+        var marshaller = Marshallers.Create<EmptyRequest>(_ => [], _ => new EmptyRequest());
+        var method = new Method<EmptyRequest, EmptyRequest>(MethodType.DuplexStreaming, "Test", "Call", marshaller, marshaller);
+        var context = new Grpc.Core.Interceptors.ClientInterceptorContext<EmptyRequest, EmptyRequest>(
+            method, "localhost", new CallOptions());
+        var interceptor = new AuthHeaderInterceptor(AccessToken);
+        string? authorization = null;
+        void Capture(Grpc.Core.Interceptors.ClientInterceptorContext<EmptyRequest, EmptyRequest> call)
+        {
+            authorization = call.Options.Headers?.GetValue("authorization");
+        }
+        switch (shape)
+        {
+            case "unary":
+                interceptor.AsyncUnaryCall(new EmptyRequest(), context, (_, call) => { Capture(call); return null!; });
+                break;
+            case "server-stream":
+                interceptor.AsyncServerStreamingCall(new EmptyRequest(), context, (_, call) => { Capture(call); return null!; });
+                break;
+            case "client-stream":
+                interceptor.AsyncClientStreamingCall(context, call => { Capture(call); return null!; });
+                break;
+            case "duplex":
+                interceptor.AsyncDuplexStreamingCall(context, call => { Capture(call); return null!; });
+                break;
+        }
+        Assert.That(authorization, Is.EqualTo(AccessToken));
+    }
+
     [TestCase("", AccessToken)]
     [TestCase("http://localhost:12345", "")]
     public void RejectsMissingHostConnectionDetails(string address, string token)
     {
-        Assert.Throws<ArgumentNullException>(() => _ = new AzdClient(address, token));
+        Assert.Throws<ArgumentException>(() => _ = new AzdClient(address, token));
     }
 
     public sealed class RpcState
@@ -116,6 +208,10 @@ public class AzdClientTests
         public string? Authorization { get; set; }
         public string? Method { get; set; }
         public string? HandlerStatus { get; set; }
+        public string? HandlerMessage { get; set; }
+        public string? ServiceHost { get; set; }
+        public string? ServiceLanguage { get; set; }
+        public bool FailStream { get; set; }
 
         public void Authenticate(ServerCallContext context)
         {
@@ -143,6 +239,10 @@ public class AzdClientTests
             IServerStreamWriter<EventMessage> responses, ServerCallContext context)
         {
             state.Authenticate(context);
+            if (state.FailStream)
+            {
+                throw new RpcException(new Status(StatusCode.Unavailable, "Test host unavailable."));
+            }
             while (await requests.MoveNext(context.CancellationToken))
             {
                 var message = requests.Current;
@@ -160,6 +260,26 @@ public class AzdClientTests
                 else if (message.ProjectHandlerStatus is not null)
                 {
                     state.HandlerStatus = message.ProjectHandlerStatus.Status;
+                    state.HandlerMessage = message.ProjectHandlerStatus.Message;
+                    return;
+                }
+                else if (message.SubscribeServiceEvent is not null)
+                {
+                    state.ServiceHost = message.SubscribeServiceEvent.Host;
+                    state.ServiceLanguage = message.SubscribeServiceEvent.Language;
+                    await responses.WriteAsync(new EventMessage
+                    {
+                        InvokeServiceHandler = new InvokeServiceHandler
+                        {
+                            EventName = message.SubscribeServiceEvent.EventNames.Single(),
+                            Project = new ProjectConfig { Name = "test-project" },
+                            Service = new ServiceConfig { Name = "test-service" },
+                        },
+                    });
+                }
+                else if (message.ServiceHandlerStatus is not null)
+                {
+                    state.HandlerStatus = message.ServiceHandlerStatus.Status;
                     return;
                 }
             }

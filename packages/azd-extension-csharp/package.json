@@ -24,7 +24,7 @@
     "build": "npm run build:emitter && npm run build:generator",
     "test": "npm run test:emitter && npm run test:generator",
     "test:emitter": "node --test test/*.test.mjs",
-    "test:generator": "dotnet test generator.Tests/TypeSpec.Azd.Generator.Tests.csproj --nologo",
+    "test:generator": "npm run generate:sample && dotnet test generator.Tests/TypeSpec.Azd.Generator.Tests.csproj --nologo",
     "test:e2e": "node --test test/e2e/*.test.mjs",
     "test:sample": "pwsh -NoProfile -File eng/Test-Sample.ps1",
     "generate:sample": "tsp compile samples/tagger --option @typespec/azd-extension-csharp.save-inputs=true",

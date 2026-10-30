@@ -41,12 +41,18 @@ public sealed class AzdExtensionGenerator : CodeModelGenerator
         AddMetadataReference(MetadataReference.CreateFromFile(typeof(Command).Assembly.Location));
         AddMetadataReference(MetadataReference.CreateFromFile(typeof(ServiceCollection).Assembly.Location));
         AddMetadataReference(MetadataReference.CreateFromFile(typeof(ServiceProvider).Assembly.Location));
-        AddMetadataReference(MetadataReference.CreateFromFile(typeof(AzdClient).Assembly.Location));
+        foreach (var type in new[] { typeof(Grpc.Net.Client.GrpcChannel), typeof(Grpc.Core.CallInvoker),
+            typeof(Grpc.Core.Interceptors.Interceptor), typeof(ProjectConfig), typeof(Google.Protobuf.IMessage),
+            typeof(System.Text.Json.JsonSerializer) })
+        {
+            AddMetadataReference(MetadataReference.CreateFromFile(type.Assembly.Location));
+        }
     }
 
     public override async Task WriteAdditionalFiles(string outputPath)
     {
         var definition = InputLibrary.InputNamespace.Extension;
+        var generated = Path.Combine(outputPath, "src", "Generated");
         var manifest = new
         {
             id = definition.Id,
@@ -60,22 +66,16 @@ public sealed class AzdExtensionGenerator : CodeModelGenerator
             capabilities = new[] { "custom-commands", "metadata" },
         };
         // JSON is a YAML subset, so serialization also safely quotes author-provided strings.
-        await File.WriteAllTextAsync(Path.Combine(outputPath, "extension.yaml"), JsonSerializer.Serialize(manifest, s_jsonOptions) + "\n");
-        var generated = Path.Combine(outputPath, "src", "Generated");
-        await File.WriteAllTextAsync(Path.Combine(generated, "CommandOptions.cs"), ReadAsset("CommandOptions.cs"));
-        foreach (var name in new[] { "AzdClient.cs", "EventManager.cs" })
-        {
-            await File.WriteAllTextAsync(Path.Combine(generated, name), ReadAsset($"upstream.dotnet.{name}"));
-        }
-        Directory.CreateDirectory(Path.Combine(outputPath, "proto"));
+        await File.WriteAllTextAsync(Path.Combine(generated, "extension.yaml"), JsonSerializer.Serialize(manifest, s_jsonOptions) + "\n");
+        Directory.CreateDirectory(Path.Combine(generated, "proto"));
         const string protoPrefix = "TypeSpec.Azd.Generator.assets.upstream.proto.";
         foreach (var resource in Assembly.GetExecutingAssembly().GetManifestResourceNames().Where(name => name.StartsWith(protoPrefix, StringComparison.Ordinal)))
         {
             var name = resource[protoPrefix.Length..];
-            await File.WriteAllTextAsync(Path.Combine(outputPath, "proto", name), ReadAsset($"upstream.proto.{name}"));
+            await File.WriteAllTextAsync(Path.Combine(generated, "proto", name), ReadAsset($"upstream.proto.{name}"));
         }
-        await File.WriteAllTextAsync(Path.Combine(outputPath, "LICENSE.azd-template.txt"), ReadAsset("upstream.LICENSE.txt"));
-        await File.WriteAllTextAsync(Path.Combine(outputPath, "azd-template.json"), ReadAsset("template-baseline.json"));
+        await File.WriteAllTextAsync(Path.Combine(generated, "LICENSE.azd-template.txt"), ReadAsset("upstream.LICENSE.txt"));
+        await File.WriteAllTextAsync(Path.Combine(generated, "azd-template.json"), ReadAsset("template-baseline.json"));
         var properties = new XElement("Project", new XElement("PropertyGroup",
             new XElement("AssemblyName", definition.EntryPoint),
             new XElement("Version", definition.Version),
@@ -95,31 +95,31 @@ public sealed class AzdExtensionGenerator : CodeModelGenerator
                 new XElement("Protobuf", new XAttribute("Include", "proto\\*.proto"), new XAttribute("ProtoRoot", "proto"), new XAttribute("GrpcServices", "Client")),
                 new XElement("EmbeddedResource", new XAttribute("Include", "LICENSE.azd-template.txt"),
                     new XAttribute("LogicalName", "TypeSpec.Azd.Template.License"))));
-        await File.WriteAllTextAsync(Path.Combine(outputPath, "Extension.Generated.props"), properties + "\n");
+        await File.WriteAllTextAsync(Path.Combine(generated, "Extension.Generated.props"), properties + "\n");
 
-        foreach (var name in new[] { "Extension.csproj", "build.ps1", "build.sh" })
+        var project = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
+            new XElement("PropertyGroup",
+                new XElement("OutputType", "Exe"), new XElement("TargetFramework", "net10.0"),
+                new XElement("Nullable", "enable"), new XElement("ImplicitUsings", "enable"),
+                new XElement("TreatWarningsAsErrors", "true")),
+            new XElement("ItemGroup",
+                new XElement("PackageReference", new XAttribute("Include", "System.CommandLine"), new XAttribute("Version", "2.0.0")),
+                new XElement("Compile", new XAttribute("Include", "..\\**\\*.cs"),
+                    new XAttribute("Exclude", "..\\Generated\\**;..\\**\\obj\\**;..\\**\\bin\\**"))),
+            new XElement("Import", new XAttribute("Project", "Extension.Generated.props")));
+        await File.WriteAllTextAsync(Path.Combine(generated, "Extension.csproj"), project + "\n");
+        foreach (var name in new[] { "build.ps1", "build.sh" })
         {
-            var path = Path.Combine(outputPath, name);
-            if (!File.Exists(path))
+            var path = Path.Combine(generated, name);
+            await File.WriteAllTextAsync(path, ReadAsset(name));
+            if (name == "build.sh" && !OperatingSystem.IsWindows())
             {
-                await File.WriteAllTextAsync(path, ReadAsset(name));
-                if (name == "build.sh" && !OperatingSystem.IsWindows())
-                {
-                    File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                        UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-                }
-                var gitIgnore = Path.Combine(outputPath, ".gitignore");
-                if (!File.Exists(gitIgnore))
-                {
-                    await File.WriteAllTextAsync(gitIgnore, ReadAsset("upstream.dotnet..gitignore"));
-                }
-                var changelog = Path.Combine(outputPath, "CHANGELOG.md");
-                if (!File.Exists(changelog))
-                {
-                    await File.WriteAllTextAsync(changelog, $"# Release History\n\n## {definition.Version} - Initial Version\n");
-                }
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                    UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
             }
         }
+        await File.WriteAllTextAsync(Path.Combine(generated, ".gitignore"), ReadAsset("upstream.dotnet..gitignore"));
+        await File.WriteAllTextAsync(Path.Combine(generated, "CHANGELOG.md"), $"# Release History\n\n## {definition.Version} - Initial Version\n");
     }
 
     internal static string CreateMetadata(InputExtension definition)
@@ -146,8 +146,7 @@ public sealed class AzdExtensionGenerator : CodeModelGenerator
 
     private static string ReadAsset(string name)
     {
-        var resourceName = name == "Extension.csproj" ? $"{name}.template" : name;
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"TypeSpec.Azd.Generator.assets.{resourceName}")
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"TypeSpec.Azd.Generator.assets.{name}")
             ?? throw new InvalidOperationException($"Missing generator asset {name}.");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd().ReplaceLineEndings("\n");
@@ -158,8 +157,15 @@ public sealed class AzdExtensionGenerator : CodeModelGenerator
         protected override TypeProvider[] BuildTypeProviders()
         {
             var definition = input.InputNamespace.Extension;
-            TypeProvider[] commands = [.. definition.Commands.Select(command => new CommandProvider(command)), new MetadataCommandProvider(definition)];
-            return [new ProgramProvider(definition, commands), .. commands];
+            var options = new CommandOptionsProvider();
+            var interceptor = new AuthHeaderInterceptorProvider();
+            var client = new AzdClientProvider(interceptor);
+            var projectArgs = new EventArgsProvider("ProjectEventArgs");
+            var serviceArgs = new EventArgsProvider("ServiceEventArgs", service: true);
+            var eventOptions = new EventArgsProvider("ServerEventOptions", options: true);
+            TypeProvider[] commands = [.. definition.Commands.Select(command => new CommandProvider(command, options)), new MetadataCommandProvider(definition, options)];
+            return [new ProgramProvider(definition, commands, client, options), .. commands, options, interceptor, client,
+                projectArgs, serviceArgs, eventOptions, new EventManagerProvider(client, projectArgs, serviceArgs, eventOptions)];
         }
     }
 }

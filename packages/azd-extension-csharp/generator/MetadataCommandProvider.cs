@@ -10,7 +10,7 @@ using static Microsoft.TypeSpec.Generator.Snippets.Snippet;
 
 namespace TypeSpec.Azd.Generator;
 
-internal sealed class MetadataCommandProvider(InputExtension definition) : TypeProvider
+internal sealed class MetadataCommandProvider(InputExtension definition, CommandOptionsProvider commandOptions) : TypeProvider
 {
     protected override string BuildName() => "MetadataCommand";
     protected override TypeSignatureModifiers BuildDeclarationModifiers() => TypeSignatureModifiers.Public | TypeSignatureModifiers.Sealed;
@@ -28,7 +28,7 @@ internal sealed class MetadataCommandProvider(InputExtension definition) : TypeP
                     create,
                     command.Property("Hidden").Assign(True).Terminate(),
                     command.Invoke("SetAction", new FuncExpression([null],
-                        Static(typeof(global::TypeSpec.Azd.Generated.CommandOptions)).Invoke("WriteMetadata",
+                        Static(commandOptions.Type).Invoke("WriteMetadata",
                             Literal(AzdExtensionGenerator.CreateMetadata(definition))))).Terminate(),
                     Return(command),
                 }, this),

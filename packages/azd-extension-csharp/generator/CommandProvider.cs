@@ -11,11 +11,11 @@ using static Microsoft.TypeSpec.Generator.Snippets.Snippet;
 
 namespace TypeSpec.Azd.Generator;
 
-internal sealed class CommandProvider(InputCommand command) : TypeProvider
+internal sealed class CommandProvider(InputCommand command, CommandOptionsProvider commandOptions) : TypeProvider
 {
     private FieldProvider? _options;
     private FieldProvider Options => _options ??= new(FieldModifiers.Private | FieldModifiers.ReadOnly,
-        typeof(global::TypeSpec.Azd.Generated.CommandOptions), "_options", this);
+        commandOptions.Type, "_options", this);
 
     protected override string BuildName() => char.ToUpperInvariant(command.Name[0]) + command.Name[1..].Replace('-', '_') + "Command";
     protected override TypeSignatureModifiers BuildDeclarationModifiers() => TypeSignatureModifiers.Public | TypeSignatureModifiers.Sealed;

@@ -46,33 +46,33 @@ npm test
 npm run generate:sample
 ```
 
-Output is under `samples/tagger/tsp-output/@typespec/azd-extension-csharp`:
+Output is under `samples/tagger/tsp-output/@typespec/azd-extension-csharp`. All generator-owned artifacts are within `src/Generated`, including the extension project and its azd manifest. Only the emitter-to-generator inputs remain at the output root:
 
 `generate:sample` explicitly sets `save-inputs=true`, retaining `tspCodeModel.json` and `Configuration.json` for inspection. Retention defaults to `true`; set the emitter's `save-inputs` option to `false` to remove those files after successful generation. Inputs are always retained when generation fails.
 
-| Output                            | Purpose                                                                    |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| `tspCodeModel.json`               | MTG code-model root plus a versioned extension section                     |
-| `Configuration.json`              | MTG pipeline configuration                                                 |
-| `src/Generated/Program.cs`        | Template-style entry point with DI registrations and a root command        |
-| `src/Generated/commands/*.cs`     | One DI-registered class with `Build()` per authored command, plus metadata |
-| `src/Generated/AzdClient.cs`      | Upstream-style authenticated client for azd's gRPC services                |
-| `src/Generated/EventManager.cs`   | Upstream lifecycle event subscription and dispatch helper                  |
-| `src/Generated/CommandOptions.cs` | Shared CLI options, working-directory handling, and output formatting      |
-| `proto/*.proto`                   | Pinned upstream scaffold contracts in the `Microsoft.Azd` C# namespace     |
-| `extension.yaml`                  | Manifest with `custom-commands` and `metadata` capabilities                |
-| `Extension.csproj`                | Executable project; no MTG dependency in the generated application         |
-| `Extension.Generated.props`       | Regenerated identity, template dependencies, and protobuf build items      |
-| `azd-template.json`               | Upstream template/protocol source revision                                 |
-| `LICENSE.azd-template.txt`        | Upstream MIT license for the included template and contracts               |
-| `build.ps1`, `build.sh`           | Self-contained platform builds compatible with `azd x pack`                |
+| Output                                              | Purpose                                                                    |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| `tspCodeModel.json`                                 | MTG code-model root plus a versioned extension section                     |
+| `Configuration.json`                                | MTG pipeline configuration                                                 |
+| `src/Generated/Program.cs`                          | Template-style entry point with DI registrations and a root command        |
+| `src/Generated/commands/*.cs`                       | One DI-registered class with `Build()` per authored command, plus metadata |
+| `src/Generated/AzdClient.cs`                        | Upstream-style authenticated client for azd's gRPC services                |
+| `src/Generated/EventManager.cs`                     | Upstream lifecycle event subscription and dispatch helper                  |
+| `src/Generated/CommandOptions.cs`                   | Shared CLI options, working-directory handling, and output formatting      |
+| `src/Generated/proto/*.proto`                       | Pinned upstream scaffold contracts in the `Microsoft.Azd` C# namespace     |
+| `src/Generated/extension.yaml`                      | Manifest with `custom-commands` and `metadata` capabilities                |
+| `src/Generated/Extension.csproj`                    | Regenerated executable project; no MTG runtime dependency                  |
+| `src/Generated/Extension.Generated.props`           | Regenerated identity, dependencies, and protobuf build items               |
+| `src/Generated/azd-template.json`                   | Upstream template/protocol source revision                                 |
+| `src/Generated/LICENSE.azd-template.txt`            | Upstream MIT license for the protocol and template reference               |
+| `src/Generated/build.ps1`, `src/Generated/build.sh` | Self-contained platform builds compatible with `azd x pack`                |
 
 `extension.yaml` is serialized as JSON, which is valid YAML and accepted by azd. This safely quotes author-provided text.
 
 Run the generated executable before packaging:
 
 ```powershell
-$extension = "samples/tagger/tsp-output/@typespec/azd-extension-csharp"
+$extension = "samples/tagger/tsp-output/@typespec/azd-extension-csharp/src/Generated"
 dotnet run --project "$extension/Extension.csproj" -- show
 dotnet run --project "$extension/Extension.csproj" -- show --output json
 dotnet run --project "$extension/Extension.csproj" -- metadata
@@ -108,29 +108,31 @@ The TypeScript library validates decorators and emits `tspCodeModel.json` direct
 
 `AzdInputLibrary` overrides the virtual `InputNamespace` property to lazily load and cache an `AzdInputNamespace`. Its loader calls MTG's `TypeSpecSerialization.Deserialize` for the shared graph, then the azd input deserializer for the extension section. The custom reader binds command results to those same `InputLiteralType` instances, preserving shared type identity without changing MTG's serializer or creating a second type graph.
 
-The MEF-exported `AzdExtensionGenerator : CodeModelGenerator` consumes `InputExtension` and `InputCommand` through that input library. It does not read or deserialize the code model itself. The generator uses MTG's `TypeFactory`, `TypeProvider`, method/expression model, writers, and Roslyn pipeline to generate the entry point and command classes. The application uses System.CommandLine, dependency injection, and azd's protobuf/gRPC client pattern; it does not load the generator at runtime.
+The MEF-exported `AzdExtensionGenerator : CodeModelGenerator` consumes `InputExtension` and `InputCommand` through that input library. It does not read or deserialize the code model itself. **All extension C# source is emitted through MTG's object model**, including `AzdClient`, `AuthHeaderInterceptor`, `EventManager`, event argument types, `CommandOptions`, the entry point, and command classes. There are no embedded/copied C# helper files. Providers construct fields, properties, constructors, method signatures, expressions, and statements; MTG's writers and Roslyn pipeline produce the source. The application uses System.CommandLine, dependency injection, and azd's protobuf/gRPC client pattern; it does not load the generator at runtime.
 
 There is **no new shared runtime or RPC server**. azd already owns the host protocol. As in the official C# starter, `Program` registers `AzdClient` as a singleton and registers command classes as transients, then adds each command's `Build()` result to the root. The generated project compiles upstream protobuf definitions into clients. `AzdClient` reads `AZD_SERVER` and `AZD_ACCESS_TOKEN` when resolved, and attaches authentication to unary and streaming calls. The greeting and metadata do not resolve it, so they also work outside an azd invocation.
 
-`src/Generated`, `proto`, `extension.yaml`, `Extension.Generated.props`, and template provenance/license files are generator-owned and replaced on regeneration. Do not edit them. The project, build scripts, `.gitignore`, and changelog are scaffolded only when absent, preserving subsequent author edits. Identity/version changes flow through the generated properties without overwriting those files. Other authored C# files are preserved. The output directory should be dedicated to this extension.
+`src/Generated` is the single generator-owned boundary. Regeneration replaces its C# source, project, manifest, scripts, protobuf definitions, license/provenance, and changelog. Do not edit them. The emitted project also compiles authored C# outside that directory under `src`; those files are preserved. The emitter retains `tspCodeModel.json` and `Configuration.json` at the output root according to `save-inputs`. The sample runner invokes azd with `src/Generated` as the extension directory, so no root-level forwarding scripts or duplicate manifests are needed.
+
+Older prototype outputs can still contain the former root-level project/scripts/protos. Generation deliberately does not delete potentially authored files outside `Generated`; use a fresh output directory to inspect the clean layout. Builds now place their `bin` and `obj` directories inside `src/Generated`.
 
 ## azd C# template baseline
 
-The output follows the [official .NET template](https://github.com/Azure/azure-dev/tree/d5ed6cd86f45dc7c44da353d6bc4f5a3ef20d873/cli/azd/extensions/microsoft.azd.extensions/internal/resources/languages/dotnet), pinned together with its flattened `languages/proto` contracts at commit `d5ed6cd86f45dc7c44da353d6bc4f5a3ef20d873`. Snapshots are embedded under `generator/assets/upstream`, so generation does not fetch files from GitHub. `azd-template.json` records that provenance in each output.
+The output follows the architecture of the [official .NET template](https://github.com/Azure/azure-dev/tree/d5ed6cd86f45dc7c44da353d6bc4f5a3ef20d873/cli/azd/extensions/microsoft.azd.extensions/internal/resources/languages/dotnet). Its flattened `languages/proto` contracts are pinned at commit `d5ed6cd86f45dc7c44da353d6bc4f5a3ef20d873` and embedded under `generator/assets/upstream`; the C# helpers are implemented as MTG providers rather than copied snapshots. Generation does not fetch files from GitHub. `azd-template.json` records the baseline in each output.
 
 The template's architecture is the target, with these explicit differences:
 
 | Area                                   | Reason for the difference                                                                                                                                                                                                                                                                                   |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Generated source directory             | The template's `Program.cs`, `commands`, `AzdClient.cs`, and `EventManager.cs` layout is retained beneath `src/Generated` so regeneration can safely remove obsolete commands without deleting authored code.                                                                                               |
-| Project file and generated properties  | The existing `Extension.csproj` name is retained; generated properties supply the template's dependency families and protobuf items while preserving project edits. azd builds through its scripts, not a required project filename.                                                                        |
+| Generated boundary                     | The complete extension project, including the template-style source layout, resides under `src/Generated`. Authored C# stays outside that directory.                                                                                                                                                        |
+| Project file and generated properties  | The `Extension.csproj` name is retained and generated with an XML object model. Its properties supply dependency families and protobuf items; all are regenerated rather than author-edited scaffolds.                                                                                                      |
 | .NET and System.CommandLine versions   | The prototype retains .NET 10 and stable System.CommandLine 2.0 rather than downgrading to the template's .NET 9 and prerelease CLI package. `Subcommands.Add`/`SetAction` are the corresponding stable APIs.                                                                                               |
 | Standard flags and metadata            | `CommandOptions` preserves azd-compatible flags and the existing JSON/none output behavior; a generated `MetadataCommand` exposes the declared command tree.                                                                                                                                                |
 | Authored commands versus demo commands | The stock `context`, `prompt`, and `listen` demonstration bodies are not injected as undeclared behavior. TypeSpec remains the command source of truth; lifecycle and RPC behavior bindings remain future authoring features. The client and event infrastructure are included.                             |
 | Missing host context                   | The default `AzdClient` constructor explicitly rejects missing host environment values, avoiding nullable warnings and making accidental standalone host calls actionable.                                                                                                                                  |
 | Platform publishing                    | Build scripts preserve azd's artifact names and platform environment conventions, map `amd64` to .NET `x64`, isolate publish directories, and fail on errors. They do not enable unvalidated trimming. Bare local builds remain framework-dependent; platform publishing is self-contained and single-file. |
 
-This is template-aligned output, not byte-for-byte copying of the starter's demo application. The generated `AzdClient` and `EventManager` follow the upstream helper implementation, with the missing-context checks described above. The upstream MIT license is included in every generated project and embedded in the executable so it travels with binary bundles.
+This is template-aligned output, not byte-for-byte copying of the starter's demo application. The object-model-generated helpers preserve authenticated unary/streaming calls and project/service event dispatch. Stream writes are serialized; failed handlers report a failed status and diagnostics; transport failures are propagated instead of silently reporting success. The upstream MIT license is included in every generated project and embedded in the executable so it travels with binary bundles.
 
 ## Validation
 
@@ -144,7 +146,7 @@ npm run lint
 
 The end-to-end suite generates and builds an executable, checks exact greeting/JSON output, help, metadata, input errors, escaping, deterministic regeneration, stale-file cleanup, and preservation of authored files. It also checks `--no-emit`, invalid contracts, and missing .NET.
 
-`npm test` includes emitter tests and .NET tests covering input-library loading/caching, shared reference identity, malformed models, and authenticated unary/event-stream calls against a local gRPC host. The end-to-end checks also cover the template-shaped layout, DI registrations, and protobuf client compilation.
+`npm test` includes emitter tests and .NET tests covering input-library loading/caching, shared reference identity, malformed models, and authenticated unary/event-stream calls against a local gRPC host. The .NET test project compiles the helper source emitted for the sample, so it tests the generated code, not duplicate implementations in the generator. The end-to-end checks also cover the generated-only layout, DI registrations, protobuf client compilation, and regeneration of stale project assets.
 
 To additionally publish the host-platform executable, pack a real bundle, install it, and invoke it through azd in a temporary isolated configuration:
 

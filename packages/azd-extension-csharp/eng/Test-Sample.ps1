@@ -18,7 +18,7 @@ if ($IsWindows -and $ConfigDirectory.Contains(' ')) {
 }
 Get-Command npm, dotnet, azd -ErrorAction Stop | Out-Null
 
-$extension = Join-Path $packageRoot 'samples' 'tagger' 'tsp-output' '@typespec' 'azd-extension-csharp'
+$extension = Join-Path $packageRoot 'samples' 'tagger' 'tsp-output' '@typespec' 'azd-extension-csharp' 'src' 'Generated'
 $bundles = Join-Path $ConfigDirectory 'bundles'
 $previousEnvironment = @{
     AZD_CONFIG_DIR = $env:AZD_CONFIG_DIR
