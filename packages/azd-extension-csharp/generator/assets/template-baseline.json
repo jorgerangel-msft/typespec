@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/Azure/azure-dev",
+  "commit": "d5ed6cd86f45dc7c44da353d6bc4f5a3ef20d873",
+  "templatePath": "cli/azd/extensions/microsoft.azd.extensions/internal/resources/languages/dotnet",
+  "protoPath": "cli/azd/extensions/microsoft.azd.extensions/internal/resources/languages/proto"
+}

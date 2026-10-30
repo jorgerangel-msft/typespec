@@ -1,0 +1,46 @@
+{
+  "name": "@typespec/azd-extension-csharp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Experimental TypeSpec authoring and MTG generation for azd extensions.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/src/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "typespec": "./lib/main.tsp",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist/src",
+    "dist/generator",
+    "lib"
+  ],
+  "scripts": {
+    "build:emitter": "tsc -p tsconfig.json",
+    "build:generator": "dotnet build generator/TypeSpec.Azd.Generator.csproj -c Release --nologo",
+    "build": "npm run build:emitter && npm run build:generator",
+    "test": "npm run test:emitter && npm run test:generator",
+    "test:emitter": "node --test test/*.test.mjs",
+    "test:generator": "dotnet test generator.Tests/TypeSpec.Azd.Generator.Tests.csproj --nologo",
+    "test:e2e": "node --test test/e2e/*.test.mjs",
+    "test:sample": "pwsh -NoProfile -File eng/Test-Sample.ps1",
+    "generate:sample": "tsp compile samples/tagger --option @typespec/azd-extension-csharp.save-inputs=true",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "oxlint --config .oxlintrc.json src test --deny-warnings"
+  },
+  "peerDependencies": {
+    "@typespec/compiler": "^1.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "~22.12.0",
+    "@typespec/compiler": "1.17.0",
+    "@typespec/prettier-plugin-typespec": "1.17.0",
+    "oxlint": "^1.87.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.8.2"
+  }
+}

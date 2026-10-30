@@ -1,0 +1,35 @@
+{
+  "name": "Contoso.Generated",
+  "apiVersions": ["2026-10-30"],
+  "constants": [
+    {
+      "kind": "constant",
+      "name": "show.result",
+      "namespace": "Contoso.Generated",
+      "valueType": { "$id": "string", "kind": "string", "name": "string" },
+      "value": "Hello from the input library!"
+    },
+    {
+      "kind": "constant",
+      "name": "other.result",
+      "namespace": "Contoso.Generated",
+      "valueType": { "$ref": "string" },
+      "value": "Another result"
+    }
+  ],
+  "enums": [],
+  "models": [],
+  "clients": [],
+  "extension": {
+    "schemaVersion": 1,
+    "id": "contoso.azd.tagger",
+    "namespace": "tagger",
+    "version": "0.1.0",
+    "displayName": "Contoso Resource Tagger",
+    "description": "An extension input fixture.",
+    "commands": [
+      { "name": "show", "description": "Show a greeting.", "result": "show.result" },
+      { "name": "again", "description": "Reuse the same result.", "result": "show.result" }
+    ]
+  }
+}
